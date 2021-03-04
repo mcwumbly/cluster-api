@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
+	"k8s.io/klog/klogr"
 )
 
 const defaultTimeout = 10 * time.Second
@@ -40,6 +42,7 @@ type Dialer struct {
 	proxyTransport http.RoundTripper
 	upgrader       spdy.Upgrader
 	timeout        time.Duration
+	logger         logr.Logger
 }
 
 // NewDialer creates a new dialer for a given API server scope
@@ -49,7 +52,8 @@ func NewDialer(p Proxy, options ...func(*Dialer) error) (*Dialer, error) {
 	}
 
 	dialer := &Dialer{
-		proxy: p,
+		proxy:  p,
+		logger: klogr.New().WithValues("dialer", "proxy dialer", "host", p.KubeConfig.Host),
 	}
 
 	for _, option := range options {
@@ -79,7 +83,16 @@ func NewDialer(p Proxy, options ...func(*Dialer) error) (*Dialer, error) {
 
 // DialContextWithAddr is a GO grpc compliant dialer construct
 func (d *Dialer) DialContextWithAddr(ctx context.Context, addr string) (net.Conn, error) {
-	return d.DialContext(ctx, scheme, addr)
+	d.logger.Info("calling DialContextWithAddr", "addr", addr)
+
+	c, err := d.DialContext(ctx, scheme, addr)
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("DialContextWithAddr addr: %s", addr))
+	}
+
+	d.logger.Info("return DialContextWithAddr", "addr", addr)
+
+	return c, nil
 }
 
 // DialContext creates proxied port-forwarded connections.
@@ -92,6 +105,7 @@ func (d *Dialer) DialContext(_ context.Context, network string, addr string) (ne
 		Name(addr).
 		SubResource("portforward")
 
+	d.logger.Info("dial", "req.URL()", req.URL())
 	dialer := spdy.NewDialer(d.upgrader, &http.Client{Transport: d.proxyTransport}, "POST", req.URL())
 
 	// Create a new connection from the dialer.

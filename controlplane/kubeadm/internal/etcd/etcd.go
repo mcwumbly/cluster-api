@@ -19,6 +19,7 @@ package etcd
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"time"
 
@@ -141,7 +142,7 @@ func NewClient(ctx context.Context, endpoints []string, p proxy.Proxy, tlsConfig
 		TLS: tlsConfig,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to create etcd client")
+		return nil, errors.Wrap(err, fmt.Sprintf("unable to create etcd client: endpoints: %v, proxy.KubeConfig.Host: %v", endpoints, p.KubeConfig.Host))
 	}
 
 	return newEtcdClient(ctx, etcdClient)
