@@ -20,10 +20,16 @@ metadata:
 spec:
   template:
     spec:
+      initConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-ip: "::"
       joinConfiguration:
         nodeRegistration:
           criSocket: /var/run/containerd/containerd.sock
-          kubeletExtraArgs: {eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'}
+          kubeletExtraArgs:
+            eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'
+            node-ip: "::"
 ---
 # MachineDeployment object
 apiVersion: cluster.x-k8s.io/v1alpha4

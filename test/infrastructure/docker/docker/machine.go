@@ -54,6 +54,7 @@ type Machine struct {
 	cluster   string
 	machine   string
 	image     string
+	ipv6      bool
 	labels    map[string]string
 	container *types.Node
 
@@ -61,7 +62,7 @@ type Machine struct {
 }
 
 // NewMachine returns a new Machine service for the given Cluster/DockerCluster pair.
-func NewMachine(cluster, machine, image string, labels map[string]string) (*Machine, error) {
+func NewMachine(cluster, machine, image string, labels map[string]string, ipv6 bool) (*Machine, error) {
 	if cluster == "" {
 		return nil, errors.New("cluster is required when creating a docker.Machine")
 	}
@@ -86,13 +87,14 @@ func NewMachine(cluster, machine, image string, labels map[string]string) (*Mach
 		cluster:     cluster,
 		machine:     machine,
 		image:       image,
+		ipv6:        ipv6,
 		container:   container,
 		labels:      labels,
 		nodeCreator: &Manager{},
 	}, nil
 }
 
-func ListMachinesByCluster(cluster string, labels map[string]string) ([]*Machine, error) {
+func ListMachinesByCluster(cluster string, labels map[string]string, ipv6 bool) ([]*Machine, error) {
 	if cluster == "" {
 		return nil, errors.New("cluster is required when listing machines in the cluster")
 	}
@@ -115,6 +117,7 @@ func ListMachinesByCluster(cluster string, labels map[string]string) ([]*Machine
 			cluster:     cluster,
 			machine:     machineFromContainerName(cluster, container.Name),
 			image:       container.Image,
+			ipv6:        ipv6,
 			labels:      labels,
 			container:   container,
 			nodeCreator: &Manager{},
@@ -164,11 +167,14 @@ func (m *Machine) ProviderID() string {
 }
 
 func (m *Machine) Address(ctx context.Context) (string, error) {
-	ipv4, _, err := m.container.IP(ctx)
+	ipv4, ipv6, err := m.container.IP(ctx)
 	if err != nil {
 		return "", err
 	}
 
+	if m.ipv6 {
+		return ipv6, nil
+	}
 	return ipv4, nil
 }
 

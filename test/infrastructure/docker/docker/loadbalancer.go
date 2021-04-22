@@ -19,6 +19,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/pkg/errors"
 	"sigs.k8s.io/cluster-api/test/infrastructure/docker/docker/types"
@@ -35,12 +36,13 @@ type lbCreator interface {
 type LoadBalancer struct {
 	name      string
 	container *types.Node
+	ipv6      bool
 
 	lbCreator lbCreator
 }
 
 // NewLoadBalancer returns a new helper for managing a docker loadbalancer with a given name.
-func NewLoadBalancer(name string) (*LoadBalancer, error) {
+func NewLoadBalancer(name string, ipv6 bool) (*LoadBalancer, error) {
 	if name == "" {
 		return nil, errors.New("name is required when creating a docker.LoadBalancer")
 	}
@@ -59,6 +61,7 @@ func NewLoadBalancer(name string) (*LoadBalancer, error) {
 	return &LoadBalancer{
 		name:      name,
 		container: container,
+		ipv6:      ipv6,
 		lbCreator: &Manager{},
 	}, nil
 }
@@ -71,7 +74,12 @@ func (s *LoadBalancer) containerName() string {
 // Create creates a docker container hosting a load balancer for the cluster.
 func (s *LoadBalancer) Create(ctx context.Context) error {
 	log := ctrl.LoggerFrom(ctx)
+	log = log.WithValues("cluster name", s.name, "ipv6", s.ipv6)
 
+	listenAddr := "0.0.0.0"
+	if s.ipv6 {
+		listenAddr = "::"
+	}
 	// Create if not exists.
 	if s.container == nil {
 		var err error
@@ -80,7 +88,7 @@ func (s *LoadBalancer) Create(ctx context.Context) error {
 			s.containerName(),
 			loadbalancer.Image,
 			clusterLabel(s.name),
-			"0.0.0.0",
+			listenAddr,
 			0,
 		)
 		if err != nil {
@@ -110,17 +118,20 @@ func (s *LoadBalancer) UpdateConfiguration(ctx context.Context) error {
 
 	var backendServers = map[string]string{}
 	for _, n := range controlPlaneNodes {
-		controlPlaneIPv4, _, err := n.IP(ctx)
+		controlPlaneIP, controlPlaneIPv6, err := n.IP(ctx)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get IP for container %s", n.String())
 		}
-		backendServers[n.String()] = fmt.Sprintf("%s:%d", controlPlaneIPv4, 6443)
+		if s.ipv6 {
+			controlPlaneIP = controlPlaneIPv6
+		}
+		backendServers[n.String()] = net.JoinHostPort(controlPlaneIP, "6443")
 	}
 
 	loadBalancerConfig, err := loadbalancer.Config(&loadbalancer.ConfigData{
 		ControlPlanePort: 6443,
 		BackendServers:   backendServers,
-		IPv6:             false,
+		IPv6:             s.ipv6,
 	})
 	if err != nil {
 		return errors.WithStack(err)
@@ -136,15 +147,18 @@ func (s *LoadBalancer) UpdateConfiguration(ctx context.Context) error {
 
 // IP returns the load balancer IP address.
 func (s *LoadBalancer) IP(ctx context.Context) (string, error) {
-	lbip4, _, err := s.container.IP(ctx)
+	lbip, lbip6, err := s.container.IP(ctx)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
-	if lbip4 == "" {
+	if s.ipv6 {
+		lbip = lbip6
+	}
+	if lbip == "" {
 		// if there is a load balancer container with the same name exists but is stopped, it may not have IP address associated with it.
 		return "", errors.Errorf("load balancer IP cannot be empty: container %s does not have an associated IP address", s.containerName())
 	}
-	return lbip4, nil
+	return lbip, nil
 }
 
 // Delete the docker container hosting the cluster load balancer.

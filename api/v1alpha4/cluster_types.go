@@ -21,6 +21,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -213,6 +214,43 @@ func (c *Cluster) GetConditions() Conditions {
 
 func (c *Cluster) SetConditions(conditions Conditions) {
 	c.Status.Conditions = conditions
+}
+
+func (c *Cluster) IPFamily() (ClusterIPFamily, error) {
+	if c.Spec.ClusterNetwork == nil {
+		return InvalidIPFamily, errors.New("Spec.ClusterNetwork is not specified")
+	}
+	if c.Spec.ClusterNetwork.Services == nil {
+		return InvalidIPFamily, errors.New("Spec.ClusterNetwork is not specified")
+	}
+	serviceCIDRs := c.Spec.ClusterNetwork.Services.CIDRBlocks
+	if len(serviceCIDRs) == 0 || len(serviceCIDRs) > 2 {
+		return InvalidIPFamily, errors.New("invalid number of service CIDRs specified")
+	}
+	if len(serviceCIDRs) == 2 {
+		return InvalidIPFamily, errors.New("dual stack is not yet supported")
+	}
+	ip, _, err := net.ParseCIDR(serviceCIDRs[0])
+	if err != nil {
+		return InvalidIPFamily, errors.Wrapf(err, "could not parse service CIDR")
+	}
+
+	if ip.To4() != nil {
+		return IPv4Family, nil
+	}
+	return IPv6Family, nil
+}
+
+type ClusterIPFamily int
+
+const (
+	InvalidIPFamily ClusterIPFamily = iota
+	IPv4Family
+	IPv6Family
+)
+
+func (f ClusterIPFamily) String() string {
+	return [...]string{"invalid", "ipv4", "ipv6"}[f]
 }
 
 // +kubebuilder:object:root=true

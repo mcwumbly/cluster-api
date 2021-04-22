@@ -121,6 +121,9 @@ func withDockerSockConfig() *kindv1.Cluster {
 			APIVersion: "kind.x-k8s.io/v1alpha4",
 			Kind:       "Cluster",
 		},
+		Networking: kindv1.Networking{
+			IPFamily: kindv1.IPv6Family,
+		},
 	}
 	kindv1.SetDefaultsCluster(cfg)
 	cfg.Nodes = []kindv1.Node{

@@ -62,14 +62,21 @@ spec:
         extraArgs: {enable-hostpath-provisioner: 'true'}
       apiServer:
         # host.docker.internal is required by kubetest when running on MacOS because of the way ports are proxied.
-        certSANs: [localhost, 127.0.0.1, 0.0.0.0, host.docker.internal]
+        certSANs: [localhost, 127.0.0.1, 0.0.0.0, "::", "::1", host.docker.internal]
     initConfiguration:
+      localAPIEndpoint:
+        advertiseAddress: '::'
+        bindPort: 6443
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
-        kubeletExtraArgs: {eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'}
+        kubeletExtraArgs:
+          eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'
+          node-ip: "::"
     joinConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
-        kubeletExtraArgs: {eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'}
+        kubeletExtraArgs:
+          eviction-hard: 'nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%'
+          node-ip: "::"
   version: "${KUBERNETES_VERSION}"
   

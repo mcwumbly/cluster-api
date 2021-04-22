@@ -124,6 +124,8 @@ func createNode(name, image, clusterLabel, role string, mounts []v1alpha4.Mount,
 		"--label", clusterLabel,
 		// label the node with the role ID
 		"--label", fmt.Sprintf("%s=%s", nodeRoleLabelKey, role),
+		"--sysctl=net.ipv6.conf.all.disable_ipv6=0",
+		"--sysctl=net.ipv6.conf.all.forwarding=1",
 	}
 
 	// pass proxy environment variables to be used by node's docker daemon
